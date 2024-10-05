@@ -13,6 +13,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final Size size = MediaQuery.sizeOf(context);
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -22,23 +23,46 @@ class HomePage extends StatelessWidget {
               "assets/icon/icon.png",
               width: 40,
             ),
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Text("Face Recognition"),
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                "Face Recognition",
+                style: textTheme.titleMedium,
+              ),
             )
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: controller.navigateToRegisterUser,
+        child: const Icon(Icons.add),
+      ),
       body: SafeArea(
-        child: SizedBox(
-          width: size.width * 0.90,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          width: size.width,
           height: size.height * 0.98,
           child: SingleChildScrollView(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.only(top: 20, bottom: 0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(
+                          "Usuários",
+                          style: textTheme.titleMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Form(
                     child: Container(
                       decoration: BoxDecoration(
@@ -59,7 +83,7 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),

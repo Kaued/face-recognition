@@ -1,6 +1,7 @@
 import 'package:asyncstate/asyncstate.dart';
 import 'package:face_recognition/components/global_loader.dart';
 import 'package:face_recognition/utils/gloabalContext/global_context.dart';
+import 'package:face_recognition/utils/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:toastification/toastification.dart';
@@ -20,6 +21,7 @@ class App extends StatelessWidget {
           child: MaterialApp.router(
             title: "Face Recognition",
             routerConfig: Modular.routerConfig,
+            theme: AppTheme.lightTheme,
           ),
         );
       },
