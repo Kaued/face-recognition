@@ -1,102 +1,123 @@
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image/image.dart';
 
 class ImageHelper {
-  Image convertYUV420(CameraImage cameraImage) {
-    final imageWidth = cameraImage.width;
-    final imageHeight = cameraImage.height;
+  Image convertN21ToImage(CameraImage image) {
+    final int width = image.width;
+    final int height = image.height;
 
-    final yBuffer = cameraImage.planes[0].bytes;
-    final uBuffer = cameraImage.planes[1].bytes;
-    final vBuffer = cameraImage.planes[2].bytes;
+    // O plano NV21 contém todos os dados em um único bloco
+    final Uint8List nv21 = image.planes[0].bytes;
 
-    final int yRowStride = cameraImage.planes[0].bytesPerRow;
-    final int yPixelStride = cameraImage.planes[0].bytesPerPixel!;
+    // Criação de uma nova imagem RGB
+    Image rgbImage = Image(width: width, height: height);
 
-    final int uvRowStride = cameraImage.planes[1].bytesPerRow;
-    final int uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
+    int yIndex = 0;
+    int uvIndex = width * height; // UV começa após os dados Y
 
-    // Create the image with swapped width and height to account for rotation
-    final image = Image(width: imageHeight, height: imageWidth);
+    for (int i = 0; i < height; i++) {
+      for (int j = 0; j < width; j++) {
+        // Dados Y
+        int y = nv21[yIndex] & 0xFF;
 
-    for (int h = 0; h < imageHeight; h++) {
-      int uvh = (h / 2).floor();
+        // Verifique se o cálculo de uvOffset não ultrapassa os limites
+        if (uvIndex < nv21.length - 1) {
+          // Para cada par de pixels (em NV21, UV compartilham dados a cada dois pixels)
+          int u = nv21[uvIndex + (j & ~1) + 1] &
+              0xFF; // U está sempre após o V no NV21
+          int v = nv21[uvIndex + (j & ~1)] & 0xFF; // V precede o U
 
-      for (int w = 0; w < imageWidth; w++) {
-        int uvw = (w / 2).floor();
+          // Conversão YUV para RGB
+          int r = (y + 1.370705 * (v - 128)).toInt();
+          int g = (y - 0.337633 * (u - 128) - 0.698001 * (v - 128)).toInt();
+          int b = (y + 1.732446 * (u - 128)).toInt();
 
-        final yIndex = (h * yRowStride) + (w * yPixelStride);
+          // Limitação para valores válidos de 0 a 255
+          r = r.clamp(0, 255);
+          g = g.clamp(0, 255);
+          b = b.clamp(0, 255);
 
-        final int y = yBuffer[yIndex];
+          // Definir pixel na imagem RGB
+          rgbImage.setPixel(j, i, rgbImage.getColor(r, g, b));
+        }
 
-        final int uvIndex = (uvh * uvRowStride) + (uvw * uvPixelStride);
+        yIndex++;
+      }
 
-        final int u = uBuffer[uvIndex];
-        final int v = vBuffer[uvIndex];
-
-        int r = (y + v * 1436 / 1024 - 179).round();
-        int g = (y - u * 46549 / 131072 + 44 - v * 93604 / 131072 + 91).round();
-        int b = (y + u * 1814 / 1024 - 227).round();
-
-        r = r.clamp(0, 255);
-        g = g.clamp(0, 255);
-        b = b.clamp(0, 255);
-
-        // Set the pixel with rotated coordinates
-        image.setPixelRgb(imageHeight - h - 1, w, r, g, b);
+      // A cada linha par, avança para a próxima linha UV (já que UV é amostrado 2x2 em NV21)
+      if (i % 2 == 0) {
+        uvIndex += width;
       }
     }
 
-    return image;
+    return rgbImage;
   }
 
-  InputImage processCameraImage(CameraImage image, CameraDescription camera) {
+  InputImage? processCameraImage(CameraImage image, CameraDescription camera) {
+    final WriteBuffer allBytes = WriteBuffer();
+
+    for (Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+
+    final Uint8List bytes = allBytes.done().buffer.asUint8List();
+
     final Size imageSize =
         Size(image.width.toDouble(), image.height.toDouble());
 
-    final InputImageRotation imageRotation =
-        __convertCameraImageRotation(camera.sensorOrientation);
+    final InputImageRotation? imageRotation =
+        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
 
-    const InputImageFormat inputImageFormat = InputImageFormat.bgra8888;
+    final InputImageFormat? inputImageFormat =
+        InputImageFormatValue.fromRawValue(image.format.raw);
 
-    final planeData = image.planes.map(
-      (Plane plane) {
-        return InputImagePlaneMetadata(
-          bytesPerRow: plane.bytesPerRow,
-          height: plane.height,
-          width: plane.width,
-        );
-      },
-    ).toList();
+    if (inputImageFormat == null) {
+      return null;
+    }
+
+    if (imageRotation == null) {
+      return null;
+    }
+
+    print(image.format.group.name);
+
+    final int bytesPerRow = image.planes[0].bytesPerRow;
 
     // Criando o InputImage a partir dos dados da imagem YUV420
     final InputImage inputImage = InputImage.fromBytes(
-      bytes: image.planes[0].bytes,
-      inputImageData: InputImageData(
+      bytes: bytes,
+      metadata: InputImageMetadata(
         size: imageSize,
-        imageRotation: imageRotation,
-        inputImageFormat: inputImageFormat,
-        planeData: planeData,
+        rotation: imageRotation,
+        format: inputImageFormat,
+        bytesPerRow: bytesPerRow,
       ),
     );
 
     return inputImage;
   }
 
-  InputImageRotation __convertCameraImageRotation(int sensorOrientation) {
-    switch (sensorOrientation) {
-      case 0:
-        return InputImageRotation.rotation0deg;
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      default:
-        assert(sensorOrientation == 270);
-        return InputImageRotation.rotation270deg;
+  Uint8List imageToByteListFloat32(
+      Image image, int inputSize, double mean, double std) {
+    // Criar um buffer para a imagem normalizada (valores entre -1 e 1)
+    var convertedBytes = Float32List(1 * inputSize * inputSize * 3);
+    var buffer = Float32List.view(convertedBytes.buffer);
+    int pixelIndex = 0;
+    for (var i = 0; i < inputSize; i++) {
+      for (var j = 0; j < inputSize; j++) {
+        buffer[pixelIndex++] =
+            (image.getPixelCubic(j, i).getChannel(Channel.red) - mean) / std;
+        buffer[pixelIndex++] =
+            (image.getPixelCubic(j, i).getChannel(Channel.green) - mean) / std;
+        buffer[pixelIndex++] =
+            (image.getPixelCubic(j, i).getChannel(Channel.blue) - mean) / std;
+      }
     }
+    return convertedBytes.buffer.asUint8List();
   }
 }

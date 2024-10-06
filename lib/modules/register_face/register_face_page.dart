@@ -47,9 +47,13 @@ class RegisterFacePage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Watch(
-                  (context) => Text(controller.hasFace.value
-                      ? "Rosto detectado"
-                      : "Detectando rosto..."),
+                  (context) => Text(
+                    controller.message.value,
+                    style: TextStyle(
+                      color: colorScheme.primary,
+                      fontSize: 20,
+                    ),
+                  ),
                 ),
               ),
             ],
